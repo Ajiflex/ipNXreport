@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ipNX Network Reporting Platform</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>ipNX Network Reporting</h1>
+    <p class="sub">POP Availability — autonomous weekly reports</p>
+  </div>
+  <div class="topbar-actions">
+    <span id="connBadge" class="badge badge-muted">checking…</span>
+    <button id="btnConnect" class="btn">Connect Google</button>
+    <button id="btnSetup" class="btn">Run Setup</button>
+    <button id="btnSync" class="btn btn-primary">Run Sync Now</button>
+  </div>
+</header>
+
+<main>
+  <section id="alerts"></section>
+
+  <section class="cards" id="statCards"></section>
+
+  <section class="panel">
+    <h2>Last sync</h2>
+    <div id="lastSync" class="mono">—</div>
+  </section>
+
+  <section class="panel">
+    <h2>Reports</h2>
+    <table id="reportsTable">
+      <thead><tr><th>Period</th><th>Status</th><th>Revision</th><th>Generated</th><th>File</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>Sources</h2>
+    <table id="sourcesTable">
+      <thead><tr><th>Name</th><th>Status</th><th>Discovery</th><th>Tabs</th><th>Last ingested</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>Exceptions</h2>
+    <table id="exceptionsTable">
+      <thead><tr><th>Period</th><th>Type</th><th>Message</th><th>Status</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>Mapping review</h2>
+    <p class="hint">Unmapped node names block report finalization. Map each to a POP asset below.</p>
+    <table id="mappingsTable">
+      <thead><tr><th>Node name (as seen)</th><th>Asset</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+
+<footer class="foot">Vercel + MongoDB migration of the Report025 Apps Script platform.</footer>
+<script src="/js/app.js"></script>
+</body>
+</html>
