@@ -1,12 +1,16 @@
 'use strict';
-// /api/cron/hourly — the Vercel Cron target. Vercel Cron issues a GET with
-// `Authorization: Bearer $CRON_SECRET`; POST is also accepted for manual
-// invocations with the same credential. Everything else → 401/405.
+// /api/cron/hourly — the Vercel Cron target.
 //
-// INTEGRATION CORRECTION #1: runAutonomousReports(sync) runs AFTER
-// syncOperationalSources; the sync result exposes per-tab errors (tab fields)
-// and the orchestrator derives everything else from source_tabs — no
-// changedDates plumbing.
+// EFFECTIVE SCHEDULE: vercel.json declares a DAILY run ("23 6 * * *") — the
+// maximum frequency Vercel's Hobby plan permits (it rejects hourly crons at
+// deploy time). On Pro and above the schedule may be restored to "0 * * * *";
+// this handler is frequency-agnostic. The engine is self-healing: every run
+// re-fingerprints Drive state against persisted source_tabs.content_hash, so
+// a longer interval never loses changes.
+//
+// Vercel Cron issues a GET with `Authorization: Bearer $CRON_SECRET`; POST is
+// also accepted for manual invocations with the same credential. Everything
+// else → 401/405.
 const crypto = require('crypto');
 const { config } = require('../../server/config');
 const { col, ensureIndexes } = require('../../server/mongodb');
@@ -62,5 +66,5 @@ module.exports = async (req, res) => {
 };
 
 // Catch-up is structural: every run re-fingerprints Drive state against
-// persisted source_tabs.content_hash, so a failed 10:00 run is fully caught by
-// the 11:00 run — no missed-run bookkeeping needed.
+// persisted source_tabs.content_hash, so a missed run is fully caught by the
+// next one — no missed-run bookkeeping needed.
