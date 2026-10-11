@@ -4,19 +4,34 @@ const { google } = require('googleapis');
 const { COLLECTIONS } = require('../config');
 const { col } = require('../mongodb');
 const { tabDateFromName, stripTime, pad2 } = require('../lib/hash');
+const { GSHEET_MIME, XLSX_MIME } = require('../google/drive');
+const { xlsxSheetsClient } = require('../google/xlsx');
+
+// Sheets-API-compatible client for EITHER source format. Google Sheets read
+// through the Sheets API; Excel workbooks read through the XLSX adapter — the
+// same shapes downstream code already consumes.
+async function sheetsClientForSource(auth, src) {
+  if (src && src.mimeType === XLSX_MIME) {
+    const drive = google.drive({ version: 'v3', auth });
+    return xlsxSheetsClient(drive, src.spreadsheetId);
+  }
+  return google.sheets({ version: 'v4', auth });
+}
 
 // sourceCandidates_(): ACTIVE registry sources first; the connected sheet as
-// legacy fallback — unchanged.
+// legacy fallback — unchanged. mimeType is carried so Excel sources are read
+// through the XLSX adapter instead of failing the Sheets API call.
 async function sourceCandidates() {
   const active = await (await col(COLLECTIONS.SOURCES)).find({ status: 'ACTIVE' }).toArray();
   if (active.length) {
     return active.map(r => ({
       spreadsheetId: r.spreadsheet_id, sourceId: r.source_id,
-      name: r.name, lastModified: r.last_modified_time || ''
+      name: r.name, lastModified: r.last_modified_time || '',
+      mimeType: r.mime_type || GSHEET_MIME
     }));
   }
   return process.env.OPERATIONAL_SHEET_ID
-    ? [{ spreadsheetId: process.env.OPERATIONAL_SHEET_ID, sourceId: '', name: '', lastModified: '' }]
+    ? [{ spreadsheetId: process.env.OPERATIONAL_SHEET_ID, sourceId: '', name: '', lastModified: '', mimeType: GSHEET_MIME }]
     : [];
 }
 
@@ -36,15 +51,18 @@ function pickAuthoritativeTab(keep, challenger, warnings) {
   return winner;
 }
 
-// discoverSourceTabs(startDate, endDate, warnings) — full port.
+// discoverSourceTabs(startDate, endDate, warnings) — full port. A reporting
+// period crossing a month boundary is served by every relevant monthly source:
+// each ACTIVE source is scanned and in-range DD_MM_YYYY tabs are collected
+// across all of them.
 async function discoverSourceTabs(auth, startDate, endDate, warnings) {
-  const sheets = google.sheets({ version: 'v4', auth });
   const byDate = {};
   const openFailures = [];
   const candidates = await sourceCandidates();
   for (const src of candidates.filter(s => s.spreadsheetId)) {
     let names;
     try {
+      const sheets = await sheetsClientForSource(auth, src); // per-source format
       const meta = await sheets.spreadsheets.get({ spreadsheetId: src.spreadsheetId, fields: 'sheets(properties.title)' });
       names = (meta.data.sheets || []).map(s => s.properties.title);
     } catch (e) {
@@ -58,7 +76,8 @@ async function discoverSourceTabs(auth, startDate, endDate, warnings) {
       if (tabDate < stripTime(startDate) || tabDate > stripTime(endDate)) continue;
       const entry = {
         spreadsheetId: src.spreadsheetId, sourceId: src.sourceId,
-        tabName, date: tabDate, sourceName: src.name, sourceModified: src.lastModified
+        tabName, date: tabDate, sourceName: src.name, sourceModified: src.lastModified,
+        mimeType: src.mimeType
       };
       byDate[tabName] = byDate[tabName] ? pickAuthoritativeTab(byDate[tabName], entry, warnings) : entry;
     }
@@ -84,4 +103,7 @@ function findMissingSourceTabs(startDate, endDate, discoveredTabs) {
   return missing;
 }
 
-module.exports = { sourceCandidates, discoverSourceTabs, findMissingSourceTabs, pickAuthoritativeTab };
+module.exports = {
+  sourceCandidates, discoverSourceTabs, findMissingSourceTabs, pickAuthoritativeTab,
+  sheetsClientForSource
+};
