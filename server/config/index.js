@@ -9,10 +9,15 @@ function required(name) {
   return v;
 }
 
+// The permanent Drive discovery root. Monthly outage workbooks added beneath
+// this folder are discovered automatically — no per-month sharing, uploading
+// or source registration. Override with GOOGLE_OPERATIONAL_FOLDER_ID.
+const DEFAULT_SOURCE_ROOT_FOLDER_ID = '1cgqmTjaUkligPALcp-_I2qbySx48zxl4';
+
 function config() {
   return {
     operationalSheetId: process.env.OPERATIONAL_SHEET_ID || '',
-    operationalFolderId: process.env.GOOGLE_OPERATIONAL_FOLDER_ID || '',
+    operationalFolderId: process.env.GOOGLE_OPERATIONAL_FOLDER_ID || DEFAULT_SOURCE_ROOT_FOLDER_ID,
     archiveFolderId: process.env.GOOGLE_ARCHIVE_FOLDER_ID || '',
     mongoUri: required('MONGODB_URI'),
     mongoDb: process.env.MONGODB_DB_NAME || 'ipnx_report',
