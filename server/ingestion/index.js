@@ -6,7 +6,8 @@ const { COLLECTIONS } = require('../config');
 const { col, upsertMany } = require('../mongodb');
 const { hashHex, tabDateFromName } = require('../lib/hash');
 const {
-  sourceCandidates, discoverSourceTabs, findMissingSourceTabs, pickAuthoritativeTab
+  sourceCandidates, discoverSourceTabs, findMissingSourceTabs, pickAuthoritativeTab,
+  sheetsClientForSource
 } = require('../discovery');
 const { discoverOperationalSources } = require('../google/drive');
 const { readSourceTab } = require('../google/sheets');
@@ -61,8 +62,10 @@ async function upsertSourceTabState(sourceId, tabName, tabDate, contentHash, row
 
 // scanSourceForChanges_ — per-tab fault tolerant; a failed tab KEEPS its prior
 // state and is retried next run (unchanged). Returns state NEW|CHANGED|UNCHANGED.
+// The tab-reading client is chosen per source format (Sheets API for Google
+// Sheets, XLSX adapter for Excel workbooks).
 async function scanSourceForChanges(auth, src) {
-  const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = await sheetsClientForSource(auth, src);
   const registry = {};
   (await (await col(COLLECTIONS.SOURCE_TABS)).find({ source_id: src.sourceId }).toArray())
     .forEach(r => { registry[r.tab_name] = r; });
@@ -74,7 +77,7 @@ async function scanSourceForChanges(auth, src) {
     if (!date) continue;
     const tabEntry = {
       spreadsheetId: src.spreadsheetId, sourceId: src.sourceId, tabName, date,
-      sourceName: src.name, sourceModified: src.lastModified
+      sourceName: src.name, sourceModified: src.lastModified, mimeType: src.mimeType
     };
     let records = null;
     try {
@@ -241,6 +244,8 @@ async function syncOperationalSources(auth) {
 // ingestRange(startDate, endDate) — the date-bounded port; outcome contract
 // SUCCESS / PARTIAL_FAILURE / FAILURE unchanged. Reads ONLY the authoritative
 // copy of each in-range tab (Level-2 discovery already applied Bug #12).
+// Every relevant monthly source for a period crossing a month boundary is
+// included, and each tab is read through the client matching its format.
 async function ingestRange(startDate, endDate, auth) {
   const warnings = [], errors = [];
   let authClient = auth;
@@ -255,12 +260,12 @@ async function ingestRange(startDate, endDate, auth) {
     errors.push({ tab: '(discovery)', message: String(e.message || e) });
     return finishIngestion('FAILURE', [], warnings, errors, 0, 0, 0, 0);
   }
-  const sheets = google.sheets({ version: 'v4', auth: authClient });
   const allRecords = [];
   let tabsRead = 0;
   for (const tabEntry of discovered) {
     let records;
     try {
+      const sheets = await sheetsClientForSource(authClient, tabEntry);
       records = await readSourceTab(sheets, tabEntry); // sets tabEntry.contentHash/rowCount
     } catch (e) {
       errors.push({ tab: tabEntry.tabName, message: String(e.message || e) });
